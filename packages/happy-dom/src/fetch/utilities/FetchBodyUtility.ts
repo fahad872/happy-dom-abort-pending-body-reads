@@ -4,13 +4,14 @@ import * as PropertySymbol from '../../PropertySymbol.js';
 import { URLSearchParams } from 'url';
 import FormData from '../../form-data/FormData.js';
 import Blob from '../../file/Blob.js';
-import DOMException from '../../exception/DOMException.js';
 import DOMExceptionNameEnum from '../../exception/DOMExceptionNameEnum.js';
 import type { TRequestBody } from '../types/TRequestBody.js';
 import type { TResponseBody } from '../types/TResponseBody.js';
 import { Buffer } from 'buffer';
 import Stream from 'stream';
 import type BrowserWindow from '../../window/BrowserWindow.js';
+import type AbortSignal from '../AbortSignal.js';
+import FetchBodyStreamUtility from './FetchBodyStreamUtility.js';
 
 /**
  * Fetch body utility.
@@ -176,70 +177,23 @@ export default class FetchBodyUtility {
 	 * @param window Window.
 	 * @param requestOrResponse
 	 * @param requestOrResponse.body
+	 * @param requestOrResponse.signal Request signal.
 	 * @param body Body stream.
+	 * @param onChunk Optional consumer for multipart parsing.
 	 * @returns Promise.
 	 */
 	public static async consumeBodyStream(
 		window: BrowserWindow,
 		requestOrResponse: {
 			body: ReadableStream | null;
+			[PropertySymbol.buffer]?: Buffer | null;
 			[PropertySymbol.aborted]: boolean;
 			[PropertySymbol.error]: Error | null;
-		}
+			signal?: AbortSignal;
+		},
+		onChunk?: (chunk: Uint8Array) => void
 	): Promise<Buffer> {
-		const body = requestOrResponse.body;
-
-		if (body === null || !(body instanceof ReadableStream)) {
-			return Buffer.alloc(0);
-		}
-
-		if (requestOrResponse[PropertySymbol.error]) {
-			throw requestOrResponse[PropertySymbol.error];
-		}
-
-		const reader = body.getReader();
-		const chunks = [];
-		let bytes = 0;
-
-		try {
-			let readResult = await reader.read();
-			while (!readResult.done) {
-				if (requestOrResponse[PropertySymbol.error]) {
-					throw requestOrResponse[PropertySymbol.error];
-				}
-				if (requestOrResponse[PropertySymbol.aborted]) {
-					throw new window.DOMException(
-						'Failed to read response body: The stream was aborted.',
-						DOMExceptionNameEnum.abortError
-					);
-				}
-				const chunk = readResult.value;
-				bytes += chunk.length;
-				chunks.push(chunk);
-				readResult = await reader.read();
-			}
-		} catch (error) {
-			if (error instanceof DOMException) {
-				throw error;
-			}
-			throw new window.DOMException(
-				`Failed to read response body. Error: ${(<Error>error).message}.`,
-				DOMExceptionNameEnum.encodingError
-			);
-		}
-
-		try {
-			if (typeof chunks[0] === 'string') {
-				return Buffer.from(chunks.join(''));
-			}
-
-			return Buffer.concat(chunks, bytes);
-		} catch (error) {
-			throw new window.DOMException(
-				`Could not create Buffer from response body. Error: ${(<Error>error).message}.`,
-				DOMExceptionNameEnum.invalidStateError
-			);
-		}
+		return FetchBodyStreamUtility.consumeBodyStream(window, requestOrResponse, onChunk);
 	}
 	/**
 	 * Wraps a given value in a browser ReadableStream.
@@ -269,19 +223,32 @@ export default class FetchBodyUtility {
 	 * @returns ReadableStream
 	 */
 	public static nodeToWebStream(nodeStream: Stream): ReadableStream {
+		let onData: (chunk: any) => void;
+		let onEnd: () => void;
+		let onError: (error: Error) => void;
 		const readableStream = new ReadableStream({
 			start(controller) {
-				nodeStream.on('data', (chunk) => {
+				onData = (chunk) => {
 					controller.enqueue(chunk);
-				});
+				};
 
-				nodeStream.on('end', () => {
+				onEnd = () => {
 					controller.close();
-				});
+				};
 
-				nodeStream.on('error', (err) => {
+				onError = (err) => {
 					controller.error(err);
-				});
+				};
+				nodeStream.on('data', onData);
+				nodeStream.on('end', onEnd);
+				nodeStream.on('error', onError);
+			},
+			cancel() {
+				nodeStream.removeListener('data', onData);
+				nodeStream.removeListener('end', onEnd);
+				if (nodeStream instanceof Stream.Readable) {
+					nodeStream.destroy();
+				}
 			}
 		});
 		(<any>readableStream)[PropertySymbol.nodeStream] = nodeStream;

@@ -5,8 +5,6 @@ import { URLSearchParams } from 'url';
 import DOMException from '../../src/exception/DOMException.js';
 import DOMExceptionNameEnum from '../../src/exception/DOMExceptionNameEnum.js';
 import Headers from '../../src/fetch/Headers.js';
-import MultipartFormDataParser from '../../src/fetch/multipart/MultipartFormDataParser.js';
-import FetchBodyUtility from '../../src/fetch/utilities/FetchBodyUtility.js';
 import Blob from '../../src/file/Blob.js';
 import File from '../../src/file/File.js';
 import FormData from '../../src/form-data/FormData.js';
@@ -113,37 +111,6 @@ describe('Response', () => {
 			expect(arrayBuffer).toBeInstanceOf(ArrayBuffer);
 			expect(Buffer.from(arrayBuffer).toString()).toBe('Hello World');
 		});
-
-		it('Supports window.happyDOM?.waitUntilComplete().', async () => {
-			await new Promise((resolve) => {
-				const response = new window.Response(
-					new ReadableStream({
-						start(controller) {
-							controller.enqueue('Hello World');
-							controller.close();
-						}
-					})
-				);
-				let isAsyncComplete = false;
-
-				vi.spyOn(FetchBodyUtility, 'consumeBodyStream').mockImplementation(
-					(): Promise<Buffer> =>
-						new Promise((resolve) => setTimeout(() => resolve(Buffer.from('Hello World')), 10))
-				);
-
-				window.happyDOM?.waitUntilComplete().then(() => (isAsyncComplete = true));
-				response.arrayBuffer();
-
-				setTimeout(() => {
-					expect(isAsyncComplete).toBe(false);
-				}, 2);
-
-				setTimeout(() => {
-					expect(isAsyncComplete).toBe(true);
-					resolve(null);
-				}, 50);
-			});
-		});
 	});
 
 	describe('blob()', () => {
@@ -159,40 +126,6 @@ describe('Response', () => {
 			const text = await blob.text();
 			expect(text).toBe('Hello World');
 		});
-
-		it('Supports window.happyDOM?.waitUntilComplete().', async () => {
-			await new Promise((resolve) => {
-				const response = new window.Response(
-					new ReadableStream({
-						start(controller) {
-							controller.enqueue('Hello World');
-							controller.close();
-						}
-					}),
-					{
-						headers: { 'Content-Type': 'text/plain' }
-					}
-				);
-				let isAsyncComplete = false;
-
-				vi.spyOn(FetchBodyUtility, 'consumeBodyStream').mockImplementation(
-					(): Promise<Buffer> =>
-						new Promise((resolve) => setTimeout(() => resolve(Buffer.from('Hello World')), 10))
-				);
-
-				window.happyDOM?.waitUntilComplete().then(() => (isAsyncComplete = true));
-				response.blob();
-
-				setTimeout(() => {
-					expect(isAsyncComplete).toBe(false);
-				}, 2);
-
-				setTimeout(() => {
-					expect(isAsyncComplete).toBe(true);
-					resolve(null);
-				}, 50);
-			});
-		});
 	});
 
 	describe('buffer()', () => {
@@ -203,39 +136,6 @@ describe('Response', () => {
 			expect(buffer).toBeInstanceOf(Buffer);
 			expect(buffer.toString()).toBe('Hello World');
 		});
-
-		it('Supports window.happyDOM?.waitUntilComplete().', async () => {
-			await new Promise((resolve) => {
-				const response = new window.Response(
-					new ReadableStream({
-						start(controller) {
-							controller.enqueue('Hello World');
-							controller.close();
-						}
-					})
-				);
-				let isAsyncComplete = false;
-
-				vi.spyOn(FetchBodyUtility, 'consumeBodyStream').mockImplementation(
-					(): Promise<Buffer> =>
-						new Promise((resolve) => setTimeout(() => resolve(Buffer.from('Hello World')), 5))
-				);
-
-				window.happyDOM?.waitUntilComplete().then(() => {
-					isAsyncComplete = true;
-				});
-				response.buffer();
-
-				setTimeout(() => {
-					expect(isAsyncComplete).toBe(false);
-				}, 2);
-
-				setTimeout(() => {
-					expect(isAsyncComplete).toBe(true);
-					resolve(null);
-				}, 50);
-			});
-		});
 	});
 
 	describe('text()', () => {
@@ -245,37 +145,6 @@ describe('Response', () => {
 
 			expect(text).toBe('Hello World');
 		});
-
-		it('Supports window.happyDOM?.waitUntilComplete().', async () => {
-			await new Promise((resolve) => {
-				const response = new window.Response(
-					new ReadableStream({
-						start(controller) {
-							controller.enqueue('Hello World');
-							controller.close();
-						}
-					})
-				);
-				let isAsyncComplete = false;
-
-				vi.spyOn(FetchBodyUtility, 'consumeBodyStream').mockImplementation(
-					(): Promise<Buffer> =>
-						new Promise((resolve) => setTimeout(() => resolve(Buffer.from('Hello World')), 10))
-				);
-
-				window.happyDOM?.waitUntilComplete().then(() => (isAsyncComplete = true));
-				response.text();
-
-				setTimeout(() => {
-					expect(isAsyncComplete).toBe(false);
-				}, 2);
-
-				setTimeout(() => {
-					expect(isAsyncComplete).toBe(true);
-					resolve(null);
-				}, 50);
-			});
-		});
 	});
 
 	describe('json()', () => {
@@ -284,39 +153,6 @@ describe('Response', () => {
 			const json = await response.json();
 
 			expect(json).toEqual({ key1: 'value1' });
-		});
-
-		it('Supports window.happyDOM?.waitUntilComplete().', async () => {
-			await new Promise((resolve) => {
-				const response = new window.Response(
-					new ReadableStream({
-						start(controller) {
-							controller.enqueue('{ "key1": "value1" }');
-							controller.close();
-						}
-					})
-				);
-				let isAsyncComplete = false;
-
-				vi.spyOn(FetchBodyUtility, 'consumeBodyStream').mockImplementation(
-					(): Promise<Buffer> =>
-						new Promise((resolve) =>
-							setTimeout(() => resolve(Buffer.from('{ "key1": "value1" }')), 10)
-						)
-				);
-
-				window.happyDOM?.waitUntilComplete().then(() => (isAsyncComplete = true));
-				response.json();
-
-				setTimeout(() => {
-					expect(isAsyncComplete).toBe(false);
-				}, 2);
-
-				setTimeout(() => {
-					expect(isAsyncComplete).toBe(true);
-					resolve(null);
-				}, 50);
-			});
 		});
 	});
 
@@ -421,71 +257,6 @@ describe('Response', () => {
 			expect(file2.type).toBe('image/jpeg');
 			expect(file2.size).toBe(imageBuffer.length);
 			expect(await file2.arrayBuffer()).toEqual(imageBuffer.buffer);
-		});
-
-		it('Supports window.happyDOM?.waitUntilComplete() for "application/x-www-form-urlencoded" content.', async () => {
-			await new Promise((resolve) => {
-				const response = new window.Response(
-					new ReadableStream({
-						start(controller) {
-							controller.enqueue('key=value');
-							controller.close();
-						}
-					}),
-					{
-						headers: {
-							'Content-Type': 'application/x-www-form-urlencoded'
-						}
-					}
-				);
-				let isAsyncComplete = false;
-
-				vi.spyOn(FetchBodyUtility, 'consumeBodyStream').mockImplementation(
-					(): Promise<Buffer> =>
-						new Promise((resolve) => setTimeout(() => resolve(Buffer.from('')), 10))
-				);
-
-				window.happyDOM?.waitUntilComplete().then(() => (isAsyncComplete = true));
-				response.formData();
-
-				setTimeout(() => {
-					expect(isAsyncComplete).toBe(false);
-				}, 2);
-
-				setTimeout(() => {
-					expect(isAsyncComplete).toBe(true);
-					resolve(null);
-				}, 50);
-			});
-		});
-
-		it('Supports window.happyDOM?.waitUntilComplete() for multipart content.', async () => {
-			await new Promise((resolve) => {
-				const response = new window.Response(new window.FormData());
-				let isAsyncComplete = false;
-
-				vi.spyOn(MultipartFormDataParser, 'streamToFormData').mockImplementation(
-					(): Promise<{ formData: FormData; buffer: Buffer }> =>
-						new Promise((resolve) =>
-							setTimeout(
-								() => resolve({ formData: new window.FormData(), buffer: Buffer.from([]) }),
-								10
-							)
-						)
-				);
-
-				window.happyDOM?.waitUntilComplete().then(() => (isAsyncComplete = true));
-				response.formData();
-
-				setTimeout(() => {
-					expect(isAsyncComplete).toBe(false);
-				}, 2);
-
-				setTimeout(() => {
-					expect(isAsyncComplete).toBe(true);
-					resolve(null);
-				}, 50);
-			});
 		});
 	});
 

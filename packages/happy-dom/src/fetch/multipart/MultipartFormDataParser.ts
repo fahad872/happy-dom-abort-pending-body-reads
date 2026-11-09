@@ -5,6 +5,7 @@ import MultipartReader from './MultipartReader.js';
 import DOMExceptionNameEnum from '../../exception/DOMExceptionNameEnum.js';
 import { Buffer } from 'buffer';
 import type BrowserWindow from '../../window/BrowserWindow.js';
+import FetchBodyStreamUtility from '../utilities/FetchBodyStreamUtility.js';
 
 /**
  * Multipart form data factory.
@@ -28,6 +29,7 @@ export default class MultipartFormDataParser {
 		window: BrowserWindow,
 		requestOrResponse: {
 			body: ReadableStream<Uint8Array> | null;
+			[PropertySymbol.buffer]?: Buffer | null;
 			[PropertySymbol.error]: Error | null;
 			[PropertySymbol.aborted]: boolean;
 		},
@@ -58,37 +60,12 @@ export default class MultipartFormDataParser {
 			);
 		}
 
-		const bodyReader = body.getReader();
 		const reader = new MultipartReader(window, match[1] || match[2]);
-		const chunks: any[] = [];
-		let buffer: Buffer;
-		const bytes = 0;
-
-		let readResult = await bodyReader.read();
-
-		while (!readResult.done) {
-			if (requestOrResponse[PropertySymbol.error]) {
-				throw requestOrResponse[PropertySymbol.error];
-			}
-			if (requestOrResponse[PropertySymbol.aborted]) {
-				throw new window.DOMException(
-					'Failed to read response body: The stream was aborted.',
-					DOMExceptionNameEnum.abortError
-				);
-			}
-			reader.write(readResult.value);
-			readResult = await bodyReader.read();
-		}
-
-		try {
-			buffer =
-				typeof chunks[0] === 'string' ? Buffer.from(chunks.join('')) : Buffer.concat(chunks, bytes);
-		} catch (error) {
-			throw new window.DOMException(
-				`Could not create Buffer from response body. Error: ${(<Error>error).message}.`,
-				DOMExceptionNameEnum.invalidStateError
-			);
-		}
+		const buffer = await FetchBodyStreamUtility.consumeBodyStream(
+			window,
+			requestOrResponse,
+			(chunk) => reader.write(chunk)
+		);
 
 		return {
 			formData: reader.end(),
